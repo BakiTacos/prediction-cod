@@ -129,16 +129,3 @@ pipeline.fit(X_train, y_train)
 
 pred_proba = pipeline.predict_proba(X_test)[:, 1]
 pred_class = (pred_proba >= 0.1821).astype(int)
-
-import joblib
-import json
-
-# Simpan pipeline
-joblib.dump(pipeline, "cod_failure_model.pkl")
-
-# Simpan threshold (0.1821) ke file terpisah
-threshold = 0.1821
-with open("cod_threshold.json", "w") as f:
-    json.dump({"threshold": threshold}, f)
-
-print("Model & threshold saved.")

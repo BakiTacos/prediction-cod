@@ -3,87 +3,99 @@ import pandas as pd
 import numpy as np
 import joblib
 
+# ==============================
+# LOAD PIPELINE + MODEL
+# ==============================
 @st.cache_resource
 def load_model():
-    model = joblib.load("xgboost_model.sav")
-    return model
+    pipeline = joblib.load("xgboost_model.sav")
+    return pipeline
 
-model_xgb = load_model() 
+pipeline = load_model()
 
-st.title("Prediksi Risiko COD Gagal Kirim")
+# Custom threshold (harus sama seperti waktu training)
+THRESHOLD = 0.1821
 
-st.write("Model ini memprediksi probabilitas pesanan COD mengalami "
-         "**Pengiriman Gagal / Paket Hilang** berdasarkan data pesanan.")
+# ==============================
+# STREAMLIT UI
+# ==============================
+st.title("📦 COD Failure Prediction App")
+st.write("Prediksi apakah pesanan COD akan **gagal** berdasarkan fitur e-commerce Indonesia.")
 
-with st.form("cod_form"):
-    col1, col2 = st.columns(2)
+st.divider()
 
-    with col1:
-        order_month = st.number_input("Bulan Pesanan (1-12)", 1, 12, 12)
-        
-        # Bisa dibuat lebih user-friendly (teks hari), tapi untuk match model: 0–6
-        order_dayofweek = st.number_input("Hari (0=Senin ... 6=Minggu)", 0, 6, 5)
-        
-        order_hour = st.number_input("Jam Pesanan (0-23)", 0, 23, 20)
+# ==============================
+# INPUT FORM
+# ==============================
+st.header("Input Order Features")
 
-        is_weekend = st.selectbox("Weekend?", ["Tidak", "Ya"])
-        same_city = st.selectbox("Apakah Kota/Kabupaten = KOTA TANGERANG?", ["Tidak", "Ya"])
-        same_province = st.selectbox("Apakah Provinsi = BANTEN?", ["Tidak", "Ya"])
+col1, col2 = st.columns(2)
 
-    with col2:
-        total_weight_gr = st.number_input("Total berat (gram)", 1, 50000, 500)
-        total_payment = st.number_input("Total pembayaran (Rp)", 1, 5000000, 50000)
-        total_qty = st.number_input("Total qty", 1, 100, 1)
+with col1:
+    order_month = st.number_input("Order Month (1–12)", 1, 12, 1)
+    order_dayofweek = st.number_input("Day of Week (0=Mon ... 6=Sun)", 0, 6, 0)
+    order_hour = st.number_input("Order Hour (0–23)", 0, 23, 12)
+    is_weekend = st.selectbox("Is Weekend?", [0, 1])
 
-        opsi_pengiriman = st.text_input("Opsi Pengiriman (sesuai dataset, contoh: Reguler SPX)", "Reguler")
-        kota = st.text_input("Kota/Kabupaten", "KOTA JAKARTA BARAT")
-        provinsi = st.text_input("Provinsi", "DKI JAKARTA")
+    same_city = st.selectbox("Same City?", [0, 1])
+    same_province = st.selectbox("Same Province?", [0, 1])
 
-    submitted = st.form_submit_button("Prediksi")
+    is_heavy = st.selectbox("Is Heavy (>2000gr)?", [0, 1])
+    is_light = st.selectbox("Is Light (<250gr)?", [0, 1])
 
-if submitted:
-    input_dict = {
-        # numeric_features
-        "order_month": int(order_month),
-        "order_dayofweek": int(order_dayofweek),
-        "order_hour": int(order_hour),
-        "is_weekend": 1 if is_weekend == "Ya" else 0,
+with col2:
+    high_payment = st.selectbox("High Payment (>150k)?", [0, 1])
+    multi_item = st.selectbox("Multiple Items?", [0, 1])
 
-        "same_city": 1 if same_city == "Ya" else 0,
-        "same_province": 1 if same_province == "Ya" else 0,
+    total_weight_gr = st.number_input("Total Weight (gram)", 0, 5000, 200)
+    total_payment = st.number_input("Total Payment (Rp)", 0, 2000000, 50000)
+    total_qty = st.number_input("Total Quantity", 1, 20, 1)
 
-        "is_heavy": 1 if total_weight_gr > 2000 else 0,
-        "is_light": 1 if total_weight_gr < 250 else 0,
-        "high_payment": 1 if total_payment > 150000 else 0,
-        "multi_item": 1 if total_qty > 1 else 0,
+    opsi_pengiriman = st.text_input("Opsi Pengiriman (exact text)")
+    kota = st.text_input("Kota/Kabupaten (exact text)")
+    provinsi = st.text_input("Provinsi (exact text)")
 
-        "total_weight_gr": float(total_weight_gr),
-        "Total Pembayaran": float(total_payment),
-        "total_qty": int(total_qty),
+st.divider()
 
-        # categorical_features
-        "Opsi Pengiriman": opsi_pengiriman,
-        "Kota/Kabupaten": kota,
-        "Provinsi": provinsi,
-    }
+# ==============================
+# PREDICT BUTTON
+# ==============================
+if st.button("🔍 Predict COD Failure"):
+    
+    input_data = pd.DataFrame([{
+        'order_month': order_month,
+        'order_dayofweek': order_dayofweek,
+        'order_hour': order_hour,
+        'is_weekend': is_weekend,
 
-    def predict_single(feature_row: pd.DataFrame):
-    # model_xgb adalah Pipeline(preprocess + model)
-        proba = model_xgb.predict_proba(feature_row)[:, 1][0]
-        pred = int(proba >= 0.3)  # threshold yang sama dengan script
-        return pred, proba
+        'same_city': same_city,
+        'same_province': same_province,
 
-    result = predict_single(input_dict)
+        'is_heavy': is_heavy,
+        'is_light': is_light,
+        'high_payment': high_payment,
+        'multi_item': multi_item,
 
-    proba = result["probability_failed"]
-    label = result["predicted_label"]
-    threshold = result["threshold"]
+        'total_weight_gr': total_weight_gr,
+        'Total Pembayaran': total_payment,
+        'total_qty': total_qty,
 
-    st.subheader("Hasil Prediksi")
-    st.write(f"Threshold model: **{threshold:.4f}**")
-    st.write(f"Probabilitas COD gagal kirim: **{proba:.2%}**")
+        'Opsi Pengiriman': opsi_pengiriman,
+        'Kota/Kabupaten': kota,
+        'Provinsi': provinsi
+    }])
+
+    # Predict probability
+    proba = pipeline.predict_proba(input_data)[0][1]
+
+    # Apply threshold
+    label = int(proba >= THRESHOLD)
+
+    st.subheader("📊 Prediction Result")
+    st.write(f"**Probability COD Failure:** {proba:.4f}")
+    st.write(f"**Threshold:** {THRESHOLD}")
 
     if label == 1:
-        st.error("⚠ Pesanan ini berisiko **TINGGI** mengalami Pengiriman Gagal / Paket Hilang.")
+        st.error("⚠️ COD kemungkinan **GAGAL** ❌")
     else:
-        st.success("✅ Pesanan ini **relatif aman** (risiko rendah).")
+        st.success("✅ COD kemungkinan **BERHASIL**")
