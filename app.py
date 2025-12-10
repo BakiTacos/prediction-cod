@@ -1,6 +1,14 @@
-# app.py
 import streamlit as st
-from prediction import predict_single
+import pandas as pd
+import numpy as np
+import joblib
+
+@st.cache_resource
+def load_model():
+    model = joblib.load("xgboost_model.sav")
+    return model
+
+model_xgb = load_model() 
 
 st.title("Prediksi Risiko COD Gagal Kirim")
 
@@ -58,6 +66,12 @@ if submitted:
         "Kota/Kabupaten": kota,
         "Provinsi": provinsi,
     }
+
+    def predict_single(feature_row: pd.DataFrame):
+    # model_xgb adalah Pipeline(preprocess + model)
+        proba = model_xgb.predict_proba(feature_row)[:, 1][0]
+        pred = int(proba >= 0.3)  # threshold yang sama dengan script
+        return pred, proba
 
     result = predict_single(input_dict)
 
