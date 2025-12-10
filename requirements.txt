@@ -1,6 +1,6 @@
 joblib
 streamlit
-scikit-learn
+scikit-learn==1.6.1
 xgboost
 pandas
 kagglehub
