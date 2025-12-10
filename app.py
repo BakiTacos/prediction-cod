@@ -1,7 +1,6 @@
 # app.py
 import streamlit as st
 import pandas as pd
-from prediction import predict_single
 
 st.title("Prediksi Risiko COD Gagal Kirim")
 
